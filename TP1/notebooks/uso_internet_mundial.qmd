@@ -1,0 +1,181 @@
+---
+title: "Uso_internet_mensual"
+format: html
+editor: visual
+---
+
+## Uso de internet mundial
+
+En este trabajo buscamos comprobar la siguiente hipotesis: "En la última década (2013-2023), **las regiones compuestas por países de ingresos bajos** (Low income y Lower middle income) han mostrado **una tasa de crecimiento porcentual en el acceso a internet** superior a la de las regiones de ingresos altos (Upper middle income y High Income), aunque su penetración absoluta siga siendo significativamente menor."
+
+Para esto primero **instalamos las librerias:**
+
+```{r}
+  library(readr)
+  library(janitor) 
+  library(dplyr)
+  library (tidyr)
+
+```
+
+Abrimos las **bases de datos:**
+
+```{r}
+uso_internet <- read_csv("../data/internet_users_world_wide.csv",skip=4) 
+
+paises <- read_csv("../data/metadata_countries_internet_users.csv") 
+```
+
+Vemos las **primeras observaciones** para ver como estan los datos:
+
+```{r}
+  head(uso_internet)
+
+  head (paises)
+
+
+```
+
+Luego de leer los archivos CSV y ver como es la tabla gracias al "head" **normalizamos los nombres de las columnas a traves de una funcion:**
+
+```{r}
+normalizacion = function(uso_internet, clean = TRUE, which = "cols") {
+
+  if (clean) {
+    data_clean = janitor::clean_names(uso_internet)
+  } else {
+    data_clean = uso_internet
+  }
+
+  if (which == "both") {
+    data_clean = data_clean |> 
+      janitor::remove_empty(which = "cols") |> 
+      janitor::remove_empty(which = "rows")
+  } else {
+    data_clean = janitor::remove_empty(data_clean, which = which)
+  }
+
+  return(data_clean)
+}
+
+internet_clean = normalizacion(uso_internet, which = "both")
+paises_clean = normalizacion(paises, which = "both") 
+```
+
+**Sacamos las variables** que no vamos a usar, sacamos "special notes" a traves de un **select**:
+
+```{r}
+paises_clean = paises_clean %>% 
+  select ( country_code, region, income_group, table_name)
+```
+
+Pasamos de **formato wide a long** la base "internet_clean":
+
+```{r}
+long_internet <- internet_clean %>%
+  select(country_name, country_code, indicator_name, indicator_code, x2013:x2023) %>%
+  pivot_longer(
+    cols = x2013:x2023,
+    names_to = "year",
+    values_to = "usu_internet"
+  ) %>%
+  mutate(year = as.numeric(gsub("x", "", year)))
+
+```
+
+Identificamos si en nuestra nueva base hay **valores faltantes (na)**
+
+```{r}
+long_internet %>%
+  summarise(
+    total_filas = n(),
+    nas_internet = sum(is.na(usu_internet))
+  )
+```
+
+Al encontrar los valores faltantes (462) **los eliminamos de la base** para que no modifiquen nuestro promedio a partir de la funcion **drop_na:**
+
+```{r}
+long_internet <- long_internet %>%
+  drop_na(usu_internet)
+```
+
+Una vez que tenemos limpia nuestra base sobre el uso de internet, **hacemos un left join para matchear las tablas long_internet y piases_clean:**
+
+```{r}
+tablas_joined <- long_internet %>%
+  left_join(paises_clean, by = "country_code")
+```
+
+Para comprobar la hipotesis debemos hacer **el promedio de ingresos por region**, **agrupando por region y año**: Para esto utilizamos las funciones de summarize y group by.
+
+```{r}
+tabla_ingresos <- tablas_joined %>%
+group_by(income_group, year, region, indicator_name) %>%
+summarise(
+prom = mean(usu_internet, na.rm = TRUE),
+.groups = "drop"
+)
+
+```
+
+**Convertimos en factores los caracteres** para poder asignarle un valor de forma jerarquica a internet join y no de forma alfabetica. Luego con la **funcion arrange** lo que hacemos es ordenarlo definitivamente de forma jeraerquica, de menor a mayor.
+
+```{r}
+tablas_joined$income_group = factor(
+  tablas_joined$income_group,
+  levels = c(
+    "Low income",
+    "Lower middle income",
+    "Upper middle income",
+    "High income"
+  )
+)
+tablas_joined = tablas_joined %>%
+  arrange(income_group, year)
+```
+
+Ahora armamos la **tabla final para poder comprobar la hipotesis**:
+
+```{r}
+
+resultado_hipotesis = 
+  
+  tablas_joined %>% group_by(year, income_group, indicator_name) %>%
+
+
+summarize(
+usu_internet = mean(usu_internet, na.rm = TRUE)
+) %>%
+
+
+pivot_wider(
+names_from = income_group,
+values_from = usu_internet
+) %>%
+
+select(
+year,
+`Low income`,
+`Lower middle income`,
+`Upper middle income`,
+`High income`,
+indicator_name
+)
+
+```
+
+**Exportamos** un archivo llamado resultado_hipotesis.csv a la carpeta /output.
+
+```{r}
+file_name = file.path("../output", "resultado_hipotesis.csv")
+write.csv(resultado_hipotesis, file_name, row.names = FALSE)
+```
+
+**2 PROBLEMAS:**
+
+1.  NO ME ENCUENTRA LA CARPETA OUTPUT
+2.  MI GITHUB NO SE CONECTA CON GIT, ENTONCES NO PUEDO COMITEAR MI ULTIMO RESULTADO
+3.  wefjowiefj
+4.  ieufweiuf
+5.  
