@@ -171,11 +171,3 @@ indicator_name
 file_name = file.path("../output", "resultado_hipotesis.csv")
 write.csv(resultado_hipotesis, file_name, row.names = FALSE)
 ```
-
-**2 PROBLEMAS:**
-
-1.  NO ME ENCUENTRA LA CARPETA OUTPUT
-2.  MI GITHUB NO SE CONECTA CON GIT, ENTONCES NO PUEDO COMITEAR MI ULTIMO RESULTADO
-3.  wefjowiefj
-4.  ieufweiuf
-5.  
