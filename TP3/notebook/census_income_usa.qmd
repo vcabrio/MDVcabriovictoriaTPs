@@ -1,0 +1,353 @@
+---
+title: "cesus income usa"
+date: "`r Sys.Date()`"
+lang: es
+execute:
+  echo: true
+  output: true
+  eval: true
+  cache: true
+format:
+  html:
+    toc: true
+    toc-location: left
+    toc-title: "Contenidos"
+    embed-resources: true
+    theme: cosmo
+    code-fold: false
+    code-tools: true
+    df-print: paged
+    include-in-header:
+      text: |
+        <style>
+        body {
+          text-align: justify;
+          font-size: 16px;
+          line-height: 1.6;
+        }
+        h1, h2, h3 {
+          color: #2C3E50;
+        }
+        .callout {
+          margin-top: 1.5em;
+          margin-bottom: 1.5em;
+        }
+        </style>
+---
+
+## PREPARACION PARA LA CARGA DE DATOS: 
+
+Instalamos los paquetes que vamos a utilizar:
+
+```{r}
+# Instalamos pacman si no está disponible para gestionar paquetes
+if (!require("pacman")) install.packages("pacman")
+
+# Cargamos todas las librerías requeridas para la sesión
+pacman::p_load(
+  tidyverse,        # Manipulación de datos (dplyr, tidyr) y visualización (ggplot2)
+  here,             # Manejo de rutas de archivos 
+  caret,            # Herramientas para partición de datos (train/test split)
+  scales,           # Formateo de ejes y etiquetas en gráficos (porcentajes, comas)
+  broom,            # Convertir outputs de modelos en dataframes (tidy, glance, augment)
+  modelsummary,     # Creación de tablas de regresión estilo publicación académica
+  kableExtra,       # decoración de tablas kable
+  marginaleffects,  # Cálculo de efectos marginales y predicciones 
+  yardstick,        # Métricas de evaluación de clasificación (ROC, AUC, Matriz de Confusión)
+  patchwork         # Organizar el apilado y composición de figuras
+)
+```
+
+```{r}
+#Cargamos nuestros datos con la libreria here. 
+
+base <- read_csv(here("TP3", "data", "adult_census_USA.csv"))
+
+```
+
+## LIMPIEZA DE VARIABLES 
+
+Primero nos encargamos de volver binaria la variable de income, para luego poder correr bien nuestros modelos.
+
+```{r}
+#Modificamos la variable de income para que sea mas facil para predecir. 
+base <- base %>% mutate ( 
+  income_bin = ifelse (income == ">50K", 1, 0))
+
+```
+
+Ahora hacemos la seleccion de las variables que vamos a utilizar para predecir nuestros modelos. Las que vamos a elegir son las siguientes: age, education_num, hours_per_week, marital_status e income.
+
+El criterio fundamental para decidir si debemos aplicar una transformación a los datos o incluir un término de interacción **no es correr modelos a ciegas**, sino **ver la distribución de los datos**.
+
+```{r}
+base_mod <- base %>% select (income, income_bin, age, sex, education_num, occupation, hours_per_week, marital_status)
+```
+
+Miramos la distribucion de las variables para saber como conviene modificarlas para nuestro estudio:
+
+```{r}
+table (base_mod$age)
+
+base_mod$age%>% 
+  density(na.rm = TRUE) %>% 
+  plot (.,
+        main = "distribucion de la edad", 
+        xlab = " ")
+
+table (base_mod$education_num)
+
+base_mod$education_num%>% 
+  density(na.rm = TRUE) %>% 
+  plot (.,
+        main = "distribucion de la educacion", 
+        xlab = " ")
+
+table (base_mod$hours_per_week)
+
+base_mod$hours_per_week%>% 
+  density(na.rm = TRUE) %>% 
+  plot (.,
+        main = "distribucion de las horas trabajadas", 
+        xlab = " ")
+
+table (base_mod$marital_status)
+
+base_mod$marital_status%>% 
+  density(na.rm = TRUE) %>% 
+  plot (.,
+        main = "distribucion del estado civil de las personas ", 
+        xlab = " ")
+```
+
+```{r}
+
+#Modificamos las horas trabajadas transformandolo en variables binarias
+
+base_mod <- base_mod %>%
+  mutate(
+
+    married = ifelse(marital_status %in%
+                       c("Married-civ-spouse",
+                         "Married-AF-spouse"), 1,
+
+                     ifelse(marital_status %in%
+                              c("Never-married",
+                                "Divorced",
+                                "Separated",
+                                "Widowed",
+                                "Married-spouse-absent"), 0, NA)),
+
+    never_married = ifelse(marital_status == "Never-married", 1,
+
+                           ifelse(marital_status %in%
+                                    c("Married-civ-spouse",
+                                      "Married-AF-spouse",
+                                      "Divorced",
+                                      "Separated",
+                                      "Widowed",
+                                      "Married-spouse-absent"), 0, NA)),
+
+    div_sep = ifelse(marital_status %in%
+                       c("Divorced",
+                         "Separated"), 1,
+
+                     ifelse(marital_status %in%
+                              c("Married-civ-spouse",
+                                "Married-AF-spouse",
+                                "Never-married",
+                                "Widowed",
+                                "Married-spouse-absent"), 0, NA)),
+
+    widowed_other = ifelse(marital_status %in%
+                             c("Widowed",
+                               "Married-spouse-absent"), 1,
+
+                           ifelse(marital_status %in%
+                                    c("Married-civ-spouse",
+                                      "Married-AF-spouse",
+                                      "Never-married",
+                                      "Divorced",
+                                      "Separated"), 0, NA))
+  )
+```
+
+## BALANCE DE DATOS: 
+
+Una vez que tenemos todos los datos mas ordenados y limpios, nos fijamos si estan balanceados
+
+```{r}
+{r}
+# Comprobamos el balance de nuestra variable objetivo
+message("Distribución de la variable objetivo (income_bin):")
+print(table(base_mod$income_bin))
+message("Proporciones:")
+print(prop.table(table(base_mod$income_bin)) |> round(3))
+```
+
+De esta forma, podemos observar que nuestros datos se encuentran balanceados ya que la variable objetivo, income_bin, cuenta con 52% que pertenencen a la categoria de ingresos bajos, mientras que hay un 47% que pertenecen a personas con ingresos altos o superiores a USD50k. Por lo tanto, solo enocontramos una diferencia de 4 puntos porcentuales entre ambas categorias.
+
+## VISUALIZACIONES BIVARIADAS: 
+
+```{r}
+# Paleta de colores para income_binaria
+paleta_income <- c("0" = "#4e79a7", "1" = "#f28e2b")
+
+```
+
+#### DISTRIBUCION DE EDAD VS INCOME 
+
+```{r}
+# Edad vs Income (Density Plot)
+plot_age <- base_mod |>
+  ggplot(aes(x = age, fill = factor(income_bin), color = factor(income_bin))) +
+  geom_density(alpha = 0.5, linewidth = 0.8) +
+  scale_fill_manual(values = paleta_income, name = "Ingreso",
+                    labels = c("0" = "<=50K", "1" = ">50K")) +
+  scale_color_manual(values = paleta_income, name = "Ingreso",
+                     labels = c("0" = "<=50K", "1" = ">50K")) +
+  labs(
+    title = "Distribución por Edad",
+    x     = "Edad (años)",
+    y     = "Densidad"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title      = element_text(face = "bold", size = 15),
+    legend.position = "bottom"
+  )
+
+print (plot_age)
+```
+
+#### DISTRIBUCION DE HORAS TRABAJADAS POR SEMANA VS INCOME
+
+```{r}
+# Horas por semana vs Income (Violin + Boxplot)
+plot_hours <- base_mod |>
+  ggplot(aes(x = factor(income_bin), y = hours_per_week,
+             fill = factor(income_bin), color = factor(income_bin))) +
+  geom_violin(alpha = 0.3, linewidth = 0.5, width = 0.8) +
+  geom_boxplot(width = 0.2, alpha = 0.8, color = "gray20", outlier.shape = NA) +
+  scale_fill_manual(values = paleta_income, guide = "none") +
+  scale_color_manual(values = paleta_income, guide = "none") +
+  scale_x_discrete(labels = c("0" = "<=50K", "1" = ">50K")) +
+  labs(
+    title = "Horas Trabajadas por Semana",
+    x     = "Nivel de Ingreso",
+    y     = "Horas por semana"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", size = 15))
+
+print (plot_hours)
+
+```
+
+#### NIVEL DE EDUCACION VS INCOME 
+
+```{r}
+#Education_num vs Income (Violin + Boxplot)
+plot_edu_num <- base_mod |>
+  ggplot(aes(x = education_num, fill = factor(income_bin), color = factor(income_bin))) +
+  geom_density(alpha = 0.5, linewidth = 0.8) +
+  scale_fill_manual(values = paleta_income, name = "Ingreso",
+                    labels = c("0" = "<=50K", "1" = ">50K")) +
+  scale_color_manual(values = paleta_income, name = "Ingreso",
+                     labels = c("0" = "<=50K", "1" = ">50K")) +
+  labs(
+    title = "Distribución por años de educacion",
+    x     = "Eduacion (años)",
+    y     = "Densidad"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title      = element_text(face = "bold", size = 15),
+    legend.position = "bottom"
+  )
+
+print (plot_edu_num)
+
+```
+
+## ¿POR QUE TRANSFORMAR LAS VARIABLES? Y ¿POR QUE REALIZAR INTERACCIONES?: 
+
+A partir de las visualizaciones exploratorias, decidimos transformar las variables continuas en categorías binarias para facilitar la interpretación del modelo logístico.
+
+Para la **edad**, se construyeron grupos asociados a distintas etapas del ciclo laboral (jóvenes, adultos jóvenes, adultos y mayores), debido a que los ingresos suelen variar según la experiencia acumulada y la trayectoria laboral. Entonces, resulta mas comodo analizar diferencias entre etapas de vida que asumir un efecto lineal.
+
+Para **educación**, se modifico la variable en niveles educativos (educación baja, secundaria, terciaria incompleta, universitaria y posgrado). Esta transformación se debe a que se asume que distintos niveles educativos generan retornos salariales diferentes en el mercado de trabajo.
+
+Por ultimo, las **horas trabajadas por semana** se agruparon en categorías (part-time, full-time estándar, jornada extendida y sobrecarga laboral). Esta decisión permite captar como los diferentes tipos de trabajo afectan los ingresos.
+
+## DECISIONES DE TRANSFORMACION 
+
+Entonces, luego de ver como se distribuyen las variables hacemos algunas modificaciones para mejorar los modelos y su interpretacion:
+
+```{r}
+#Modificamos la educacion, transformandolo en variables binarias 
+base_mod <- base_mod %>%
+  mutate(
+
+    educ_baja = ifelse(education_num %in% c(1:8), 1,
+                       ifelse(education_num %in% c(9:16), 0, NA)),
+
+    educ_secundaria = ifelse(education_num %in% c(9,10), 1,
+                             ifelse(education_num %in% c(c(1:8),11:16), 0, NA)),
+
+    educ_terc_inc = ifelse(education_num %in% c(11,12), 1,
+                           ifelse(education_num %in% c(c(1:10),13:16), 0, NA)),
+
+    educ_universitaria = ifelse(education_num == 13, 1,
+                                ifelse(education_num %in% c(1:12,14:16), 0, NA)),
+
+    educ_posgrado = ifelse(education_num %in% c(14:16), 1,
+                           ifelse(education_num %in% c(1:13), 0, NA))
+  )
+```
+
+```{r}
+#Modificamos la edad
+base_mod <- base_mod %>%
+  mutate(
+
+    edad_joven = ifelse(age >= 17 & age <= 29, 1,
+                        ifelse(age >= 30, 0, NA)),
+
+    edad_adulto_joven = ifelse(age >= 30 & age <= 44, 1,
+                               ifelse(age < 30 | age >= 45, 0, NA)),
+
+    edad_adulto = ifelse(age >= 45 & age <= 59, 1,
+                         ifelse(age < 45 | age >= 60, 0, NA)),
+
+    edad_mayor = ifelse(age >= 60, 1,
+                        ifelse(age < 60, 0, NA))
+  )
+```
+
+```{r}
+#Modificamos las horas 
+base_mod <- base_mod %>%
+  mutate(
+
+    horas_part_time = ifelse(hours_per_week < 35, 1,
+                             ifelse(hours_per_week >= 35, 0, NA)),
+
+    horas_full_time = ifelse(hours_per_week >= 35 &
+                               hours_per_week <= 44, 1,
+                             ifelse(hours_per_week < 35 |
+                                      hours_per_week >= 45, 0, NA)),
+
+    horas_extendido = ifelse(hours_per_week >= 45 &
+                               hours_per_week <= 59, 1,
+                             ifelse(hours_per_week < 45 |
+                                      hours_per_week >= 60, 0, NA)),
+
+    horas_sobrecarga = ifelse(hours_per_week >= 60, 1,
+                              ifelse(hours_per_week < 60, 0, NA))
+  )
+```
+
+## DECISION DE INTERACCION: 
+
+Vamos a incorporar una interacción entre **horas trabajadas por semana y sexo**, ya que el efecto de trabajar más horas puede no ser igual para hombres y mujeres. En general, trabajar jornadas más largas suele estar más asociado a ingresos altos en los hombres, mientras que en las mujeres este efecto puede verse limitado por una mayor carga de trabajo doméstico y de cuidados no remunerados. Por eso, incluir esta interacción permite analizar si el impacto de las horas trabajadas sobre el ingreso cambia según el sexo del individuo. 
