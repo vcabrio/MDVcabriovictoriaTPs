@@ -78,13 +78,11 @@ base <- base %>% mutate (
 
 Ahora hacemos la seleccion de las variables que vamos a utilizar para predecir nuestros modelos. Las que vamos a elegir son las siguientes: age, education_num, hours_per_week, marital_status e income.
 
-El criterio fundamental para decidir si debemos aplicar una transformación a los datos o incluir un término de interacción **no es correr modelos a ciegas**, sino **ver la distribución de los datos**.
-
 ```{r}
 base_mod <- base %>% select (income, income_bin, age, sex, education_num, occupation, hours_per_week, marital_status)
 ```
 
-Miramos la distribucion de las variables para saber como conviene modificarlas para nuestro estudio:
+Sin embargo, como el criterio fundamental para decidir si debemos aplicar una transformación a los datos o incluir un término de interacción **no es correr modelos a ciegas**, sino **ver la distribución de los datos vamos a** miramos la distribucion de las variables para saber como conviene modificarlas para nuestro estudio:
 
 ```{r}
 table (base_mod$age)
@@ -119,6 +117,8 @@ base_mod$marital_status%>%
         main = "distribucion del estado civil de las personas ", 
         xlab = " ")
 ```
+
+Entonces, una vez que observamos la distribucion de los datos, lo primero que cambiamos es la variable de married ya que creemos que es conveniente hacerlo.
 
 ```{r}
 
@@ -184,7 +184,7 @@ message("Proporciones:")
 print(prop.table(table(base_mod$income_bin)) |> round(3))
 ```
 
-De esta forma, podemos observar que nuestros datos se encuentran balanceados ya que la variable objetivo, income_bin, cuenta con 52% que pertenencen a la categoria de ingresos bajos, mientras que hay un 47% que pertenecen a personas con ingresos altos o superiores a USD50k. Por lo tanto, solo enocontramos una diferencia de 4 puntos porcentuales entre ambas categorias.
+De esta forma, podemos observar que nuestros datos se encuentran balanceados ya que la variable objetivo, income_bin, cuenta con 52% de las observaciones que pertenencen a la categoria de ingresos bajos, mientras que hay un 47% que pertenecen a personas con ingresos altos o superiores a USD50k. Por lo tanto, solo enocontramos una diferencia de 4 puntos porcentuales entre ambas categorias.
 
 ## VISUALIZACIONES BIVARIADAS:
 
@@ -193,6 +193,8 @@ De esta forma, podemos observar que nuestros datos se encuentran balanceados ya 
 paleta_income <- c("0" = "#4e79a7", "1" = "#f28e2b")
 
 ```
+
+Entonces, como hicimos con la variable de "married", tambien vamos a observar como se distribuyen las variables de edad, horas trabajadas y nivel de educacion para analizar si es necesario modificar las mismas para analizarlas.
 
 #### DISTRIBUCION DE EDAD VS INCOME
 
@@ -349,7 +351,7 @@ base_mod <- base_mod %>%
 
 ## DECISION DE INTERACCION:
 
-Para justificar la inclusión de un término de interacción (`horas trabajadas * sex`), primero debemos ver si la distribución del nivel educativo varía significativamente entre hombres y mujeres en nuestra muestra, y cómo se relaciona esto con el voto.
+Para justificar la inclusión de un término de interacción (`horas trabajadas * sex`), primero debemos ver si la distribución del nivel educativo varía significativamente entre hombres y mujeres en nuestra muestra, y cómo se relaciona esto con el income.
 
 ```{r}
 # Creamos variable categórica de jornada laboral
@@ -374,7 +376,7 @@ p_barras <- graf |>
                     labels = c("0" = "<=50K", "1" = ">50K")) +
   scale_y_continuous(labels = label_percent()) +
   labs(
-    title    = "Proporción de ingresos >$50K según jornada laboral",
+    title    = "Prop. de ingresos según jornada laboral",
     subtitle = "¿Cambia el efecto de las horas trabajadas?",
     x        = "Tipo de jornada",
     y        = "Proporción"
@@ -390,7 +392,7 @@ p_barras
 
 ```
 
-Sin embargo, si diferenciamos entre hombre y mujer (por sexo) podemos enocntrar qu elos ingresos difieren eentre si.
+Sin embargo, si diferenciamos entre hombre y mujer (por sexo) podemos enocntrar qu elos ingresos difieren entre si.
 
 ```{r}
 # Grafico de barras para entender la distribución del ingreso 
@@ -405,7 +407,7 @@ p_interaccion_barras <- graf |>
                     labels = c("0" = "<=50K", "1" = ">50K")) +
   scale_y_continuous(labels = label_percent()) +
   labs(
-    title    = "Proporción de ingresos >$50K según jornada laboral, por sexo",
+    title    = "Prop. de ingresos según jornada laboral x sexo",
     subtitle = "¿Cambia el efecto de las horas trabajadas dependiendo del sexo?",
     x        = "Tipo de jornada",
     y        = "Proporción"
@@ -438,7 +440,7 @@ Primero fijamos nuestras categorias de referencia antes de correr los modelos:
 
 -   Para la categoria **horas trabajadas** vamos a utilizar **horas_part_time** la cual permite observar el efecto de trabajar jornadas más extensas respecto a quienes trabajan pocas horas.
 
--   Para la categoria de **estado civil** vamos a utilizar **married** ya que es la categoría más numerosa y suele asociarse a mayores ingresos.
+-   Para la categoria de **estado civil** vamos a utilizar **married** ya que es la categoría más numerosa y esta asociada a mayores ingresos.
 
 ## MODELO 1:
 
@@ -670,7 +672,19 @@ ggplot(df_plot_or, aes(y = reorder(term_clean, estimate), x = estimate)) +
 
 ```
 
-## COMPARANDO MODELOS: 
+El gráfico de Odds Ratios confirma los resultados obtenidos en la tabla del Modelo 2 y permite identificar con mayor claridad cuáles son los factores más importantes para explicar los ingresos altos.
+
+En primer lugar, el nivel educativo aparece como el predictor más relevante, las categorías de educación universitaria y educación terciaria incompleta muestran los efectos positivos más fuertes, indicando que las personas con mayor formación tienen muchas más probabilidades de percibir ingresos superiores a USD 50.000. La categoría de posgrado no fue incluida en el gráfico porque presenta un efecto excepcionalmente alto (OR ≈ 20).
+
+A su vez, los grupos de edad adulto joven, adulto y mayor presentan mayores probabilidades de alcanzar ingresos elevados en comparación con la categoría de referencia, lo que sugiere que la experiencia laboral acumulada juega un papel importante.
+
+Las jornadas laborales full-time, extendidas y de sobrecarga también muestran efectos positivos y significativos, evidenciando que trabajar más horas está asociado con mayores ingresos.
+
+Además, las interacciones entre sexo masculino y horas trabajadas resultan positivas y significativas, lo que indica que el beneficio económico de trabajar jornadas más extensas es mayor para los hombres que para las mujeres. En cambio, las categorías divorciado/separado y viudo/otro presentan efectos negativos, reflejando menores probabilidades de pertenecer al grupo de ingresos altos en comparación con las personas casadas.
+
+Por lo tanto, el gráfico coincide con los resultados observados en la tabla y refuerza la idea de que la educación, la edad, las horas trabajadas y la interacción entre género y dedicación laboral son los principales factores asociados a la obtención de ingresos elevados.
+
+## COMPARANDO MODELOS:
 
 ```{r}
 bind_rows(
@@ -703,18 +717,6 @@ bind_rows(
 
 ```
 
-## CONCLUSIONES: 
+## CONCLUSIONES:
 
-Podrías interpretarlo de la siguiente manera:
-
-> **Comparación del ajuste de los modelos**
->
-> Para evaluar el desempeño de ambos modelos se compararon la Deviance Residual, el Pseudo-R² de McFadden y el AIC. En primer lugar, ambos modelos parten de la misma **Deviance Nula (21.820,6)**, ya que utilizan la misma variable dependiente y el mismo conjunto de observaciones.
->
-> Al incorporar los predictores, la **Deviance Residual** disminuye considerablemente en ambos casos, lo que indica que las variables seleccionadas explican una parte importante de la variación en los ingresos. Sin embargo, el **Modelo 2**, que incorpora la interacción entre sexo y horas trabajadas, presenta una Deviance Residual ligeramente menor (13.808,2) que el Modelo 1 (13.845,1), señal de un mejor ajuste a los datos.
->
-> El **Pseudo-R² de McFadden** también favorece al Modelo 2. Mientras que el Modelo 1 alcanza un valor de 0,366, el Modelo 2 obtiene 0,367. La mejora es pequeña, pero indica que la interacción aporta información adicional para explicar la probabilidad de obtener ingresos superiores a USD 50.000.
->
-> Finalmente, el criterio más útil para comparar ambos modelos es el **AIC**, donde valores más bajos indican un mejor equilibrio entre ajuste y complejidad. El Modelo 2 presenta un AIC de **13.844,2**, inferior al del Modelo 1 (**13.875,1**), lo que implica una mejora de aproximadamente **31 puntos**. Como regla general, diferencias superiores a 10 puntos suelen considerarse evidencia fuerte a favor del modelo con menor AIC.
->
-> En conjunto, estos resultados sugieren que el **Modelo 2 (Interactivo)** describe mejor los datos que el Modelo 1. Aunque la mejora en el poder explicativo es moderada, la interacción entre sexo y horas trabajadas contribuye de manera significativa a capturar patrones que el modelo base no logra representar, por lo que constituye la especificación preferida para el análisis.
+En conclusion, si bien ambos modelos presentan un buen desempeño, el **Modelo 2** muestra resultados superiores. En particular, registra una menor Deviance Residual y un AIC más bajo, lo que indica un mejor ajuste a los datos sin aumentar excesivamente la complejidad del modelo. Además, el Pseudo-R² de McFadden también es levemente mayor. En conjunto, estos resultados sugieren que incorporar la interacción entre sexo y horas trabajadas aporta información relevante para explicar los ingresos, por lo que el Modelo 2 resulta la mejor opcion para el análisis.
