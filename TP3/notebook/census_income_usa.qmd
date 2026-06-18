@@ -111,11 +111,6 @@ base_mod$hours_per_week%>%
 
 table (base_mod$marital_status)
 
-base_mod$marital_status%>% 
-  density(na.rm = TRUE) %>% 
-  plot (.,
-        main = "distribucion del estado civil de las personas ", 
-        xlab = " ")
 ```
 
 Entonces, una vez que observamos la distribucion de los datos, lo primero que cambiamos es la variable de married ya que creemos que es conveniente hacerlo.
